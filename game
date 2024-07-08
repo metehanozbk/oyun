@@ -1,0 +1,244 @@
+import pygame
+import random
+
+# Oyunu başlat
+pygame.init()
+
+# Ekran boyutları
+WIDTH, HEIGHT = 900, 800
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Parkur Oyunu")
+
+# Renkler
+WHITE = (255, 255, 255)
+BLUE = (0, 0, 110)
+GREEN = (0, 140, 0)
+YELLOW = (255, 255, 0)  # Altın rengi
+
+# Zemin
+class Ground(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((WIDTH, 250))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect()
+        self.rect.bottom = HEIGHT
+
+# Oyuncu
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))
+        self.colors = [GREEN, (255, 0, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255)]  # Farklı renkler
+        self.color_index = 0
+        self.image.fill(self.colors[self.color_index])
+        self.rect = self.image.get_rect()
+        self.rect.center = (50, HEIGHT - 265)
+        self.vel = 3
+        self.jump = False
+        self.jump_height = 11
+        self.jump_back = False
+
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_RIGHT]:
+            self.rect.x += self.vel
+        if keys[pygame.K_LEFT]:
+            self.rect.x -= self.vel
+        if keys[pygame.K_UP] and not self.jump and not self.jump_back:
+            self.jump = True
+
+        if self.jump:
+            if self.jump_height >= -5:
+                neg = 1
+                if self.jump_height < 0:
+                    neg = -1
+                self.rect.y -= (self.jump_height ** 2) * 0.2 * neg
+                self.jump_height -= 1
+            else:
+                self.jump = False
+                self.jump_back = True
+                self.jump_height = 5
+
+        if self.jump_back:
+            if self.rect.y < HEIGHT - 280:
+                self.rect.y += 3
+            else:
+                self.jump_back = False
+                self.jump_height = 12
+
+    def change_color(self):
+        self.color_index = (self.color_index + 1) % len(self.colors)
+        self.image.fill(self.colors[self.color_index])
+
+# Düşmanlar
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((35, 35))
+        self.image.fill(WHITE)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+
+    def update(self):
+        self.rect.x -= 1
+
+# Altınlar
+class Coin(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((20, 20), pygame.SRCALPHA)  # Şeffaf arka plan
+        pygame.draw.circle(self.image, YELLOW, (10, 10), 10)  # Sarı dairesel altın
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.direction = 1  # Yukarı-aşağı hareket yönü
+        self.move_counter = 0
+
+    def update(self):
+        self.rect.x -= 1
+        self.move_counter += 1
+        if self.move_counter >= 30:  # Yön değişim sıklığı
+            self.direction *= -1
+            self.move_counter = 0
+        self.rect.y += self.direction  # Altını yukarı veya aşağı hareket ettir
+
+# Skor tablosu
+class Scoreboard:
+    def __init__(self):
+        self.score = 0
+        self.font = pygame.font.SysFont(None, 36)
+
+    def increase_score(self, points=1):
+        self.score += points
+
+    def show_score(self):
+        text = self.font.render("Skor: " + str(self.score), True, WHITE)
+        screen.blit(text, (10, 10))
+
+# Başlangıç ekranını göster
+def show_start_screen():
+    screen.fill(BLUE)
+    font = pygame.font.SysFont(None, 64)
+    text = font.render("Parkur Oyunu", True, WHITE)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(text, text_rect)
+    pygame.display.flip()
+    pygame.time.wait(2000)
+
+# Oyun bitiş ekranını göster
+def show_game_over_screen():
+    screen.fill(BLUE)
+    font = pygame.font.SysFont(None, 72)
+    text = font.render("Oyun Bitti!", True, WHITE)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(text, text_rect)
+    pygame.display.flip()
+    pygame.time.wait(2000)
+
+# Oyun objelerini oluştur
+def create_game_objects():
+    all_sprites = pygame.sprite.Group()
+    enemies = pygame.sprite.Group()
+    coins = pygame.sprite.Group()
+
+    player = Player()
+    all_sprites.add(player)
+
+    ground = Ground()
+    all_sprites.add(ground)
+
+    # Düşmanları ve altınları yerleştir
+    last_enemy_x = 0
+    for _ in range(750):
+        enemy_gap = random.randint(350, 500)
+        enemy_x = last_enemy_x + enemy_gap
+        enemy_y = HEIGHT - 280
+        enemy = Enemy(enemy_x, enemy_y)
+        all_sprites.add(enemy)
+        enemies.add(enemy)
+        last_enemy_x = enemy_x
+
+        if random.random() < 0.3:
+            enemy2 = Enemy(enemy_x, enemy_y - 20)
+            all_sprites.add(enemy2)
+            enemies.add(enemy2)
+
+        if random.random() < 0.5:
+            coin_x = enemy_x + random.randint(50, 100)
+            coin_y = enemy_y - random.randint(50, 100)
+            coin = Coin(coin_x, coin_y)
+            all_sprites.add(coin)
+            coins.add(coin)
+
+    scoreboard = Scoreboard()
+
+    return all_sprites, enemies, coins, player, scoreboard
+
+# Oyun döngüsü
+def game_loop():
+    all_sprites, enemies, coins, player, scoreboard = create_game_objects()
+
+    initial_speed = 0.5  # Daha yavaş başlangıç hızı
+    speed_increase = 0.002  # Daha yavaş hız artışı
+    current_speed = initial_speed
+
+    clock = pygame.time.Clock()
+    running = True
+    game_over = False
+
+    while running:
+        clock.tick(65)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+              if event.type == pygame.KEYDOWN:
+                  if event.key == pygame.K_TAB and game_over:
+                    game_loop()
+                    return
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+
+        if not game_over:
+            all_sprites.update()
+
+            # Çarpışmaları kontrol et
+            hits = pygame.sprite.spritecollide(player, enemies, False)
+            if hits:
+                game_over = True
+
+            coin_hits = pygame.sprite.spritecollide(player, coins, True)
+            if coin_hits:
+                scoreboard.increase_score(20)
+
+            scoreboard.increase_score()
+
+            if scoreboard.score % 500 == 0:
+                player.change_color()
+
+            current_speed += speed_increase
+
+        for enemy in enemies:
+            enemy.rect.x -= current_speed
+
+        for coin in coins:
+            coin.rect.x -= current_speed
+
+        screen.fill(BLUE)
+        all_sprites.draw(screen)
+        scoreboard.show_score()
+
+        if game_over:
+            font = pygame.font.SysFont(None, 72)
+            text = font.render("Oyun Bitti!", True, WHITE)
+            text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+            screen.blit(text, text_rect)
+
+        pygame.display.flip()
+
+    pygame.quit()
+
+show_start_screen()
+game_loop()
